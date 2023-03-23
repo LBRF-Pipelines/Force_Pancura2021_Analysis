@@ -1,0 +1,13 @@
+# Ignore invisible files (except .gitignore)
+**/.*
+!**/.gitignore
+
+# Ignore data files
+**/*.[Rr][Dd]ata
+**/*.[Rr][Dd]s
+**/*.arrow
+**/*.cfs
+**/*.csv
+
+# Ignore unwanted Python files
+**/*.pyc
