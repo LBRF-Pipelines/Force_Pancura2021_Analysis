@@ -15,14 +15,7 @@ source("./_Scripts/_settings.R")
 source("./_Scripts/utils.R")
 
 
-### Import data ###
-
-if (file.exists("./imported_data.RData")) {
-  load("./imported_data.RData")
-} else {
-  verbose <- TRUE
-  source("./_Scripts/0_import.R")
-}
+### Run after import script ###
 
 
 ### Additional cleaning of the trial metadata ###

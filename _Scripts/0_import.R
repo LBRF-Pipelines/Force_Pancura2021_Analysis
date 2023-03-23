@@ -12,22 +12,26 @@ library(purrr)
 library(tibble)
 library(dplyr)
 library(tidyr)
-library(tidyverse)
+library(arrow)
 
 source("./_Scripts/_settings.R")
-source("./_Scripts/_importcfs.R")
 source("./_Scripts/utils.R")
 
 
 
-### Import trial metadata files ###
+### Import trial metadata ###
 
-# Get file list
+# Get file lists
 
-cfs_files <- list.files(
-  "./_Data/cfs/", pattern = "*.cfs",
+mep_trial_files <- list.files(
+  "./_Data/frames/", pattern = "*.csv",
   full.names = TRUE
-) 
+)
+
+signal_files <- list.files(
+  "./_Data/signals/", pattern = "*.arrow",
+  full.names = TRUE
+)
 
 
 # Import participant master list
@@ -45,34 +49,31 @@ participant_dat <- read_csv(master_path, skip = 5, col_types = cols()) %>%
 names(participant_dat) <- tolower(names(participant_dat))
 
 
-# Import trial metadata
+# Import Signal frame metadata
 
-trialvars <- c('StateL', 'Power A')
-
-verbose <- TRUE
-
-optlog("\n - Importing trial metadata")
-
-trialdat <- map_df(cfs_files, function(f) {
-
-  # Import CFS file into R
-  cfs_dat <- import_cfs(f, c("Target"), trialvars)
-  optlog(".")
-
-  # Append participant ID
+trialdat <- map_df(mep_trial_files, function(f) {
   pid <- as.integer(gsub("[Pp]_([0-9]+).*$", "\\1", basename(f)))
-  df <- cfs_dat$trial %>%
-    add_column(id = pid, .before = 1)
+  df <- read_csv(f, col_types = cols(), progress = FALSE)
+  add_column(df, id = pid, .before = 1)
+})
 
-  # Summarize force targets from signal data
-  force_targets <- cfs_dat$signal %>%
-    group_by(frame) %>%
+
+# Import & extract the force target for each trial
+
+targetdat <- map_df(signal_files, function(f) {
+
+  # Import signal data and grab the force target channel
+  df <- read_feather(f, col_select = c("frame", "time", "target"))
+
+  # Extract the trial's target force from the signal
+  df <- df %>%
     filter(time > 0.5 & time < 1.0) %>%
-    summarize(force_target = round(mean(Target) * 10) * 10)
+    group_by(frame) %>%
+    summarize(force_target = round(mean(target) * 10) * 10)
 
-  # Join the summarized force data to the rest of the trial data
-  df %>%
-    left_join(force_targets, by = "frame")
+  # Append the participant ID and return the data
+  pid <- as.integer(gsub("[Pp]_([0-9]+).*$", "\\1", basename(f)))
+  add_column(df, id = pid, .before = 1)
 
 })
 
@@ -80,10 +81,8 @@ trialdat <- map_df(cfs_files, function(f) {
 # Wrangle metadata to be easier to work with
 
 trialdat <- trialdat %>%
-  rename(
-    state = StateL,
-    pwr_a = `Power A`
-  ) %>%
+  select(-c(pulse_interval, pwr_b)) %>%
+  left_join(targetdat, by = c("id", "frame")) %>%
   left_join(select(participant_dat, c(id, order)), by = "id") %>%
   mutate(
     order = as.factor(order),
@@ -101,19 +100,16 @@ rest_trials <- trialdat %>%
 
 
 
-### Import signal data ###
+### Import EMG & force transducer data ###
 
-optlog("\n - Importing signal data")
-signaldat <- map_df(cfs_files, function(f) {
+signaldat <- map_df(signal_files, function(f) {
 
-  # Import CFS file into R
-  cfs_dat <- import_cfs(f, c("FDS", "Force"), c())
-  optlog(".")
+  # Import the EMG and force transducer signal data
+  df <- read_feather(f, col_select = c("frame", "time", "fds", "force"))
 
-  # Append participant ID
+  # Append the participant ID
   pid <- as.integer(gsub("[Pp]_([0-9]+).*$", "\\1", basename(f)))
-  df <- cfs_dat$signal %>%
-    add_column(id = pid, .before = 1)
+  df <- add_column(df, id = pid, .before = 1)
 
   # Drop rest trials
   rest_for_id <- subset(rest_trials, id == pid)
@@ -124,18 +120,20 @@ signaldat <- map_df(cfs_files, function(f) {
 })
 
 signaldat <- signaldat %>%
-  rename(emg = FDS, force = Force)
+  rename(emg = fds)
 
 
 
 ### Import labview data ###
 
 labviewfiles <- list.files(
-  "./_Data/csv/", pattern = "*.csv",
+  "./_Data/labview/", pattern = "*.csv",
   full.names = TRUE
 )
 
 # Set column types for subsequent import
+
+labview_names <- c("maxGrip", "condition", "block", "trial", "target")
 
 col_overrides <- cols(
   maxGrip = col_double(),
@@ -149,23 +147,10 @@ col_overrides <- cols(
 
 labviewdat <- map_df(labviewfiles, function(f) {
   id_num <- as.numeric(gsub("^p(\\d+).*", "\\1", basename(f)))
-  data = read_csv(f,col_names = c("maxGrip", "condition", "block", "trial", "target"), col_types = col_overrides)
+  data <-  read_csv(f, col_names = labview_names, col_types = col_overrides)
   data <- add_column(data, id = id_num, .before = 1)
   data
 })
 
-labviewdat<- labviewdat %>%
+labviewdat <- labviewdat %>%
   relocate(trial, .before = 2)
-
-
-### Write out imported/wrangled data to an RDS ###
-
-# Note: This doesn't save much time, but it can avoid issues with R being
-# unstable after loading the reticulate package
-
-optlog("\n - Saving data to .Rdata...\n")
-save(
-  participant_dat, trialdat, signaldat,
-  file = "./imported_data.RData"
-)
-
