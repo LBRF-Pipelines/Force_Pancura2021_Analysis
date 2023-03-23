@@ -22,14 +22,14 @@ optlog <- function(msg) {
 # function won't work because it mistakenly errors on complex numbers, so
 # this modified version fixes that.
 
-pinv <- function (A, tol = .Machine$double.eps ^ (2 / 3)) {
+pinv <- function(A, tol = .Machine$double.eps ^ (2 / 3)) {
 
   stopifnot(
     is.numeric(A) | is.complex(A), length(dim(A)) == 2, is.matrix(A)
   )
   s <- svd(A)
 
-  p <- ( s$d > max(tol * s$d[1], 0) )
+  p <- (s$d > max(tol * s$d[1], 0))
   if (all(p)) {
       mp <- s$v %*% (1 / s$d * t(s$u))
   } else if (any(p)) {
@@ -43,32 +43,6 @@ pinv <- function (A, tol = .Machine$double.eps ^ (2 / 3)) {
 
 
 ### Signal Processing Functions ###
-
-notch_filter <- function(signal, freq, srate) {
-
-  # Create Pei-Tseng notch filter
-  nyquist_hz <- srate / 2
-  notch <- gsignal::butter(4, c(freq - 2, freq + 2) / nyquist_hz, "stop")
-
-  # Apply notch filter and return filtered data
-  gsignal::filtfilt(notch, signal)
-}
-
-
-# A line noise filter that works really well, but causes post-MEP distortions
-# for higher-amplitude MEPs (a problem for LICI trials). Included here for
-# comparitive purposes.
-
-pei_tseng_filter <- function(signal, freq, srate) {
-
-  # Create Pei-Tseng notch filter
-  nyquist_hz <- srate / 2
-  notch <- gsignal::pei_tseng_notch(freq / nyquist_hz, 2 / nyquist_hz)
-
-  # Apply notch filter and return filtered data
-  gsignal::filter(notch, signal)
-}
-
 
 # A line noise filter based on discrete Fourier transformation (DFT).
 # Based on the 'zero' method of FieldTrip's ft_preproc_dftfilter, except it
@@ -105,7 +79,7 @@ dft_filt <- function(signal, line_hz, srate, window = NA) {
 
 
 dft_filt_sine <- function(signal, line_hz, srate, window = NA) {
-  
+
   # Get the maximum number of samples divisible by the line noise frequency
   nsamples <- length(signal)
   if (is.na(window)) {
@@ -113,23 +87,23 @@ dft_filt_sine <- function(signal, line_hz, srate, window = NA) {
   } else {
     n <- as.integer(window / line_hz) * line_hz
   }
-  
+
   # Temporary subtract the mean from the signal
   sigmean <- mean(signal)
   signal <- signal - sigmean
-  
+
   # Generate a complex sine wave at the line noise frequency
   time <- (1:nsamples - 1) / srate
   k <- 2 * pi * line_hz * time
   noise_tmp <- exp(1i * k)
-  
+
   # Estimate the amplitude of the line noise from the signal
   ampl <- 2 * t(signal[1:n]) %*% pinv(t(noise_tmp[1:n]))
   noise_est <- noise_tmp * as.vector(ampl)
-  
+
   # Subtract the estimated line noise from the signal and re-add the mean
   sine <- Re(noise_est) + sigmean
-  
+
   sine
 }
 
@@ -207,6 +181,7 @@ plot_psd <- function(signal, srate, db = TRUE) {
     xlab("Frequency (Hz)") +
     ylab("Power (dB)")
 }
+
 
 plot_mep <- function(amp, time, window = c(-0.5, 0.2)) {
   ggplot() +
