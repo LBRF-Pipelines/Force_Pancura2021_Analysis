@@ -21,7 +21,7 @@ signaldat <- signaldat %>%
 signaldat <- signaldat %>%
   left_join(
     select(participant_dat, c(id, order)),
-    by = c("id")
+    by = c("id") 
   ) %>%
   select(c(id, trial, order, time, emg, force))
 
@@ -65,6 +65,12 @@ prepulse_emg <- signaldat %>%
     max_deviation = max(abs(emg_filt - median(emg_filt)) / mad(emg_filt))
   )
 
+z_prepulse_emg <- prepulse_emg %>%
+  group_by(id) %>%
+  mutate(z_madmed = (madmed - mean(madmed))/sd(madmed))
+
+prepulse_emg <- prepulse_emg %>%
+  left_join(z_prepulse_emg, by = c("id", "trial", "rms", "madmed", "max_deviation"))
 
 # Summarize TMS pulse artifact amplitudes in EMG signal
 
@@ -154,12 +160,12 @@ mep_onsets <- mep_windows %>%
   ) %>%
   filter(time <= tmax & !wonky) %>%
   left_join(
-    select(prepulse_emg, c(id, trial, madmed)),
+    select(prepulse_emg, c(id, trial, z_madmed)),
     by = c("id", "trial")
   ) %>%
   group_by(id, trial) %>%
   summarize(
-    onset = detect_onset(emg_filt, time, madmed)
+    onset = detect_onset(emg_filt, time, z_madmed)
   )
 
 mep_peaks <- mep_peaks %>%
@@ -216,15 +222,15 @@ order2emg_ME <- order2emg_ME %>% #39 trials dropped
 
 order1emg <- order1emg %>% #38 trials dropped
   subset(time < 5) %>%
-  summarize(id, trial, order, time, emg, force, emg_filt, vmax, vmin, tmax, tmin, ampl, wonky, onset, rms, madmed, max_deviation,
+  summarize(id, trial, order, time, emg, force, emg_filt, vmax, vmin, tmax, tmin, ampl, wonky, onset, rms, madmed, max_deviation, z_madmed,
             mean = mean(emg)) %>%
-  filter(mean < 5 && mean > -5)
+  filter(z_madmed < 2 && z_madmed > -2)
 
 order2emg <- order2emg %>% #1 trial dropped
   subset(time < 5) %>%
-  summarize(id, trial, order, time, emg, force, emg_filt, vmax, vmin, tmax, tmin, ampl, wonky, onset, rms, madmed, max_deviation,
+  summarize(id, trial, order, time, emg, force, emg_filt, vmax, vmin, tmax, tmin, ampl, wonky, onset, rms, madmed, max_deviation, z_madmed,
             mean = mean(emg)) %>%
-  filter(mean < 5 && mean > -5)
+  filter(z_madmed < 2 && z_madmed > -2)
 
 #Rejoin data frames once bad EMG MI trials are dropped
 
