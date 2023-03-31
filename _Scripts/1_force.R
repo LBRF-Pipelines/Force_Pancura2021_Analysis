@@ -47,13 +47,6 @@ signaldat <- signaldat %>%
 
 ### Remove unnecessary data to shorten dataset ###
 
-#Separating countdown data (first 3 seconds) from the rest of trial
-
-countdown <- signaldat %>%
-  select(-c(emg)) %>%
-  subset(time < 3)
-
-
 # Get & downsample force transducer data for window of interest
 # (2.2 seconds of data after GO!)
 
@@ -191,7 +184,7 @@ accuracy <- accuracy %>%
 
 accuracy <- accuracy %>%
   group_by(id, target) %>%
-  summarize(
+  mutate(
     accuracy,
     sd = sd(accuracy)
   )
