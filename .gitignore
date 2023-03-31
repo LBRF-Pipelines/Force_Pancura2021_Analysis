@@ -11,3 +11,7 @@
 
 # Ignore unwanted Python files
 **/*.pyc
+
+# Ignore generated plots
+**/*.pdf
+**/*.zip

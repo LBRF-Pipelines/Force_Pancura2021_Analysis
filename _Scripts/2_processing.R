@@ -7,7 +7,20 @@
 
 ### Run after force script ###
 
-#Add trial number and order to signaldat
+# Grab 1000 ms of EMG at rest (0.5 to 1.5s) for muscle activity comparison
+
+emg_rest <- signaldat %>%
+  subset(time >= 0.5 & time < 1.5) %>%
+  select(-force)
+
+
+# Isolate time windows for MEPs (1000 ms pre-pulse to 200 ms post-pulse)
+
+signaldat <- signaldat %>%
+  subset(time > 4 & time < 5.2)
+
+
+# Add trial number and order to EMG data
 
 trialnums <- signaldat %>%
   group_by(id, frame) %>%
@@ -21,27 +34,19 @@ signaldat <- signaldat %>%
 signaldat <- signaldat %>%
   left_join(
     select(participant_dat, c(id, order)),
-    by = c("id") 
+    by = c("id")
   ) %>%
   select(c(id, trial, order, time, emg, force))
 
-
-#Remove ME trials in which target force was not achieved
-
-signaldat <- subset(
-  anti_join(signaldat, drop_trials,
-            by = c("id", "trial")
-  )
-)
+emg_rest <- emg_rest %>%
+  left_join(trialnums, by = c("id", "frame")) %>%
+  select(c(id, trial, time, emg))
 
 
-#Isolate time window for MEP
-
-extra_data <- signaldat %>%
-  subset(time < 4)
+# Remove ME trials in which target force was not achieved
 
 signaldat <- signaldat %>%
-  subset(time > 4 & time < 5.2)
+  anti_join(drop_trials, by = c("id", "trial"))
 
 
 # Demean and filter line noise from the EMG signal for each trial
@@ -51,6 +56,23 @@ signaldat <- signaldat %>%
   mutate(
     emg = emg - median(emg),
     emg_filt = dft_filt(emg, line_hz, srate, window = 1000)
+  )
+
+emg_rest <- emg_rest %>%
+  group_by(id, trial) %>%
+  mutate(
+    emg = emg - median(emg),
+    emg_filt = dft_filt(emg, line_hz, srate)
+  )
+
+
+# Summarize EMG activity during rest for reference
+
+resting_emg <- emg_rest %>%
+  group_by(id, trial) %>%
+  summarize(
+    rms_pre = sqrt(mean(emg_filt ** 2)),
+    madmed_pre = mad(emg_filt)
   )
 
 
@@ -63,14 +85,9 @@ prepulse_emg <- signaldat %>%
     rms = sqrt(mean(emg_filt ** 2)),
     madmed = mad(emg_filt),
     max_deviation = max(abs(emg_filt - median(emg_filt)) / mad(emg_filt))
-  )
+  ) %>%
+  left_join(resting_emg, by = c("id", "trial"))
 
-z_prepulse_emg <- prepulse_emg %>%
-  group_by(id) %>%
-  mutate(z_madmed = (madmed - mean(madmed))/sd(madmed))
-
-prepulse_emg <- prepulse_emg %>%
-  left_join(z_prepulse_emg, by = c("id", "trial", "rms", "madmed", "max_deviation"))
 
 # Summarize TMS pulse artifact amplitudes in EMG signal
 
@@ -99,7 +116,7 @@ mep_windows <- signaldat %>%
   filter(time * 1000 <= (max_pulse_on + 100)) %>%
   filter(time * 1000 <= (pulse_onset + mep_window[2])) %>%
   filter(time * 1000 >= (pulse_onset + mep_window[1])) %>%
-  select(c(id, trial, pulse, time, emg, emg_filt))
+  select(c(id, trial, time, emg, emg_filt))
 
 
 # Detect and correct for recordings with inverted electrodes
@@ -137,6 +154,7 @@ mep_windows <- mep_windows %>%
   select(-max_first)
 
 
+
 ### Summarize MEPs using EMG data ###
 
 # Detect peaks/amplitudes of MEPs
@@ -151,6 +169,7 @@ mep_peaks <- mep_windows %>%
     wonky = tmin < tmax
   )
 
+
 # Detect onsets of MEPs
 
 mep_onsets <- mep_windows %>%
@@ -160,12 +179,12 @@ mep_onsets <- mep_windows %>%
   ) %>%
   filter(time <= tmax & !wonky) %>%
   left_join(
-    select(prepulse_emg, c(id, trial, z_madmed)),
+    select(prepulse_emg, c(id, trial, madmed)),
     by = c("id", "trial")
   ) %>%
   group_by(id, trial) %>%
   summarize(
-    onset = detect_onset(emg_filt, time, z_madmed)
+    onset = detect_onset(emg_filt, time, madmed)
   )
 
 mep_peaks <- mep_peaks %>%
@@ -183,12 +202,64 @@ sr_meps <- signaldat %>%
     prepulse_emg, by = c("id", "trial")
   )
 
-#Discard extra data frames (saves space, big files)
-
-rm(trialnums, rest_trials, mep_onsets, mep_peaks, mep_windows, peak_orders)
 
 
-### Removing bad EMG trials from MI block ###
+### Removing bad MEPs from data ###
+
+# Find MI trials where pre-pulse EMG activity is > 3x the activity during rest
+# or 4x the overall median pre-pulse EMG during imagery
+
+prepulse_emg <- prepulse_emg %>%
+  subset(!(id %in% bad_ids)) %>%
+  left_join(select(participant_dat, c(id, order)), by = "id") %>%
+  mutate(
+    imagery = ((order == 1) == (trial > 80)),
+    madm_ratio = madmed / madmed_pre
+  )
+
+median_madm_mi <- median(subset(prepulse_emg, imagery)$madmed)
+
+bad_by_emg <- prepulse_emg %>%
+  ungroup() %>%
+  mutate(
+    bad_by_ratio = imagery & (madm_ratio > 3),
+    bad_by_madm = imagery & (madmed > 4 * median_madm_mi)
+  ) %>%
+  subset(bad_by_ratio | bad_by_madm)
+
+
+# Find MEPs with small amplitudes (< 25 mV) and weird MEP peak times
+
+bad_by_ampl <- mep_peaks %>%
+  subset(!(id %in% bad_ids) & !wonky) %>%
+  subset(ampl < 25)
+
+bad_by_tmax <- mep_peaks %>%
+  subset(!(id %in% bad_ids) & !wonky & ampl > 25) %>%
+  group_by(id) %>%
+  mutate(
+    med_tmax = median(tmax),
+    tmax_diff = tmax - med_tmax
+  ) %>%
+  subset(abs(tmax_diff) > 0.0071)
+
+
+# Mark 'missed trigger' trials
+
+missedtrigger <- mep_peaks %>%
+  subset(id %in% c(1, 15, 40, 42) & trial == 81)
+
+
+# Remove all bad trials from MEP data
+
+trimmed_meps <- mep_peaks %>%
+  subset(!(id %in% bad_ids)) %>%
+  subset(!wonky) %>%
+  anti_join(bad_by_emg, by = c("id", "trial")) %>%
+  anti_join(bad_by_ampl, by = c("id", "trial")) %>%
+  anti_join(bad_by_tmax, by = c("id", "trial")) %>%
+  anti_join(missedtrigger, by = c("id", "trial"))
+
 
 #Separate by order (ME first vs MI first) and isolate MI trials for filtering
 
@@ -307,7 +378,7 @@ ggplot(trial_ex, aes(x = time, y = emg_filt)) +
   geom_line() +
   ylab("Filtered EMG") +
   xlab("Time") +
-  plot_theme 
+  plot_theme
 
 #Separate trimmed data by block and condition
 
