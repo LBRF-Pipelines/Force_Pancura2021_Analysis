@@ -159,7 +159,7 @@ detect_onset <- function(signal, time, baseline_var) {
   if (any(before_spike, na.rm = TRUE)) {
     onset <- max(which(before_spike))
   } else {
-    onset <- length(time) - 1  # default to sample before peak
+    onset <- 1  # default to first sample (easy to detect)
   }
 
   time[onset]
