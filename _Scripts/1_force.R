@@ -100,81 +100,35 @@ forcedat <- forcedat %>%
   mutate(force = round(((force - 1) / (1 - maxGrip)) * -100, 2))
 
 
-# Separate by order (ME first vs MI first) & drop MI trials from force analysis
+# Get the mean force in the 200 ms pre-pulse for each trial
 
-order1force <- forcedat %>%
-  subset(order == 1 & time > 4.8 & time < 5 & trial < 81)
-
-order2force <- forcedat %>%
-  subset(order == 2 & time > 4.8 & time < 5 & trial > 80)
-
-order1force <- order1force %>%
+force_means <- forcedat %>%
+  subset(!(id %in% bad_ids)) %>%
+  subset(time > 4.8 & time < 5) %>%
   group_by(id, trial) %>%
-  summarize(sumforce = mean(force))
-
-order2force <- order2force %>%
-  group_by(id, trial) %>%
-  summarize(sumforce = mean(force))
-
-order1force <- order1force %>%
-  right_join(
-    select(labviewdat, c(id, trial, target)),
-    by = c("id", "trial")
-  ) %>%
-  select(id, trial, target, sumforce)
-
-order2force <- order2force %>%
-  right_join(
-    select(labviewdat, c(id, trial, target)),
-    by = c("id", "trial")
-  ) %>%
-  select(id, trial, target, sumforce)
+  summarize(
+    order = order[1],
+    imagery = ((order[1] == 1) == (trial > 80))[1],
+    target = target[1],
+    sumforce = mean(force)
+  )
 
 
-#Determine if target force was achieved
+# Check whether each physical trial was within 3% of its target force
 
-order1force <- order1force %>%
-  mutate(target_achieved = abs(sumforce - target) < 3)
+force_means_pp <- force_means %>%
+  subset(!imagery) %>%
+  mutate(
+    target_achieved = abs(sumforce - target) < 3
+  )
 
-order2force <- order2force %>%
-  mutate(target_achieved = abs(sumforce - target) < 3)
-
-
-#Remove bad trials
-
-force_data_1 <- order1force %>%
-  subset(target_achieved != FALSE)
-
-force_data_2 <- order2force %>%
-  subset(target_achieved != FALSE)
-
-drop_trials_1 <- order1force %>%
-  subset(target_achieved != TRUE)
-
-drop_trials_2 <- order2force %>%
-  subset(target_achieved != TRUE)
-
-drop_trials <- full_join(drop_trials_1, drop_trials_2)
-
-
-#Rejoin force data
-
-force_data <- full_join(force_data_1, force_data_2) %>%
-  filter(!(id %in% bad_ids))
-
-
-#Discard extra data frames (saves space, big files)
-
-rm(drop_trials_1, drop_trials_2, force_data_1, force_data_2, order1force, order2force, trialmap, col_overrides)
+bad_by_force <- subset(force_means_pp, !target_achieved)
 
 
 
 #Visualizing participant accuracy across levels of effector load
 
-all_data <- full_join(force_data, drop_trials) %>%
-  filter(!(id %in% bad_ids))
-
-accuracy <- all_data %>%
+accuracy <- force_means_pp %>%
   group_by(id, trial, target) %>%
   summarize(error_rate = (abs(sumforce - target) / target) * 100)
 

@@ -12,7 +12,7 @@ max_pulse_on <- 5000
 # The window of time (in ms following each supra-threshold pulse) to search
 # for an MEP. For example, for an SICI trial with a 120% RMT pulse at 1002 ms
 # and a window of c(10, 90), the pipeline will look for the MEP between 1012 ms
-# and 1092 ms, inclusive.s
+# and 1092 ms, inclusive.
 mep_window <- c(10, 70)
 
 # The window of time (in ms) following a TMS pulse to look for the peak of the

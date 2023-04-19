@@ -43,10 +43,11 @@ emg_rest <- emg_rest %>%
   select(c(id, trial, time, emg))
 
 
-# Remove ME trials in which target force was not achieved
+# Drop bad IDs & ME trials in which target force was not achieved
 
 signaldat <- signaldat %>%
-  anti_join(drop_trials, by = c("id", "trial"))
+  subset(!(id %in% bad_ids)) %>%
+  anti_join(bad_by_force, by = c("id", "trial"))
 
 
 # Demean and filter line noise from the EMG signal for each trial
