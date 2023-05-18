@@ -25,12 +25,21 @@ trialdat <- trialdat %>%
   filter(frame <= 248)
 
 
-# Remove bad participants
+# Remove participants where we were unable to establish RMT
 
-bad_ids <- c(4, 34, 48)
+no_rmt_ids <- subset(participant_dat, is.na(rmt))$id
+
+
+# Remove participants with equipment issues during collection
+# (force transducer not working properly, 0% grip accuracy)
+
+bad_ids <- c(4, 48)
+
+
+# Drop all bad IDs from participant data
 
 dropped_participants <- participant_dat %>%
-  filter(id %in% bad_ids | is.na(rmt))
+  filter(id %in% bad_ids | id %in% no_rmt_ids)
 
 participant_dat <- anti_join(participant_dat, dropped_participants)
 
