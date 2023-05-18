@@ -85,7 +85,8 @@ prepulse_emg <- signaldat %>%
   summarize(
     rms = sqrt(mean(emg_filt ** 2)),
     madmed = mad(emg_filt),
-    max_deviation = max(abs(emg_filt - median(emg_filt)) / mad(emg_filt))
+    max_deviation = max(abs(emg_filt - median(emg_filt)) / mad(emg_filt)),
+    minmax = max(emg_filt) - min(emg_filt)
   ) %>%
   left_join(resting_emg, by = c("id", "trial"))
 
@@ -123,18 +124,19 @@ mep_windows <- signaldat %>%
 # Detect and correct for recordings with inverted electrodes
 
 mean_meps <- mep_windows %>%
-  mutate(n = 1:n()) %>%
-  group_by(id, n) %>%
-  mutate(
+  group_by(id, trial) %>%
+  mutate(time = time - min(time)) %>%
+  group_by(id, time) %>%
+  summarize(
     mean_emg = mean(emg_filt)
   )
 
 peak_orders <- mean_meps %>%
   group_by(id) %>%
   summarize(
-    nmin = min(n[mean_emg == min(mean_emg)]),
-    nmax = min(n[mean_emg == max(mean_emg)]),
-    max_first = nmax < nmin
+    tmin_avg = min(time[mean_emg == min(mean_emg)]),
+    tmax_avg = min(time[mean_emg == max(mean_emg)]),
+    max_first = tmax_avg < tmin_avg
   ) %>%
   select(c(id, max_first))
 
