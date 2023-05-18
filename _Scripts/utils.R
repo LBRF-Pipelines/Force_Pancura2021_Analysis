@@ -132,15 +132,21 @@ spline_upsample <- function(signal, time, new_srate) {
 
 detect_peaks <- function(signal, time, min_srate) {
 
-  # NOTE: ignoring secondary peaks?
+  # Get the values and timestamps of each inflection point (change in
+  # direction) in the signal. This prevents points at edges from being
+  # considered minima/maxima.
+  dx <- signal - lag(signal)
+  indices <- which(sign(dx) != sign(lead(dx)))
+  inflections <- signal[indices]
+  inflections_t <- time[indices]
 
   # Look for MEP min/max values within the window
-  mep_max <- max(signal)
-  mep_min <- min(signal)
+  mep_max <- max(inflections)
+  mep_min <- min(inflections)
 
   # Get timestamps of MEP max/min values
-  mep_max_t <- min(time[signal == mep_max])
-  mep_min_t <- min(time[signal == mep_min])
+  mep_max_t <- min(inflections_t[inflections == mep_max])
+  mep_min_t <- min(inflections_t[inflections == mep_min])
 
   # Return list of values
   tibble(
