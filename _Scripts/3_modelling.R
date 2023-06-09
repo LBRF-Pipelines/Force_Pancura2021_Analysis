@@ -40,12 +40,14 @@ bad_by_emg <- prepulse_emg %>%
 
 bad_by_ampl <- mep_peaks %>%
   subset(!(id %in% bad_ids)) %>%
-  subset(ampl < 25)
+  subset(ampl < 25) %>%
+  mutate(bad_by_ampl = TRUE)
 
 bad_by_snr <- mep_peaks %>%
   left_join(prepulse_emg, by = c("id", "trial")) %>%
   subset(!(id %in% bad_ids) & ampl > 25) %>%
-  subset((ampl / minmax) <= 1)
+  subset((ampl / minmax) <= 1) %>%
+  mutate(bad_by_snr = TRUE)
 
 
 # Find MEPs with implausibly early peak onsets (< 15 ms post-pulse)
@@ -56,13 +58,15 @@ bad_by_onset <- mep_peaks %>%
   mutate(
     peak_time = ifelse(tmin < tmax, tmin, tmax)
   ) %>%
-  subset(peak_time < 5.015)
+  subset(peak_time < 5.015) %>%
+  mutate(bad_by_onset = TRUE)
 
 
 # Mark 'missed trigger' trials
 
 missedtrigger <- mep_peaks %>%
-  subset(id %in% c(1, 15, 40, 42) & trial == 81)
+  subset(id %in% c(1, 15, 40, 42) & trial == 81) %>%
+  mutate(missed_trigger = TRUE)
 
 
 # Remove all bad trials from MEP data
@@ -94,7 +98,8 @@ mep_dat <- trimmed_meps %>%
   )
 
 
-# Check for participants with no MEPs in a given condition
+# Check for participants with no MEPs in a given cell or that are missing
+# more than 50% of all trials in a block
 
 cell_counts <- mep_dat %>%
   mutate(
@@ -109,11 +114,19 @@ cell_counts <- mep_dat %>%
     target = as.factor(as.numeric(as.character(target)))
   )
 
+too_many_missing <- cell_counts %>%
+  group_by(id, imagery) %>%
+  summarize(
+    pct_usable = mean(count) * 10
+  ) %>%
+  subset(pct_usable < 50)
+
 missing_cells <- cell_counts %>%
   subset(count == 0)
 
 mep_dat <- mep_dat %>%
-  anti_join(missing_cells, by = "id")
+  anti_join(missing_cells, by = "id") %>%
+  anti_join(too_many_missing, by = "id")
 
 
 # Check for participants with excessively low imagery abilities (per the KVIQ)
@@ -135,5 +148,5 @@ mep_dat_z <- mep_dat %>%
   mutate(
     imagery = as.factor(imagery),
     target = as.factor(target),
-    order = as.factor(order)
+    order = as.factor(ifelse(order == 2, "MI->ME", "ME->MI"))
   )

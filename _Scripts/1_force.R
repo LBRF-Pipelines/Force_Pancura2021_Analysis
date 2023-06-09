@@ -131,7 +131,8 @@ force_means_pp <- force_means %>%
     target_achieved = abs(sumforce - target) < 3
   )
 
-bad_by_force <- subset(force_means_pp, !target_achieved)
+bad_by_force <- subset(force_means_pp, !target_achieved) %>%
+  mutate(bad_by_force = TRUE)
 
 
 
