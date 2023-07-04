@@ -5,6 +5,13 @@
 # Author: Austin Hurst & Devan Pancura
 
 
+### Import required packages ###
+
+library(dplyr)
+library(brms)
+library(bayestestR)
+
+
 
 ### Removing bad MEPs from data ###
 
@@ -148,5 +155,65 @@ mep_dat_z <- mep_dat %>%
   mutate(
     imagery = as.factor(imagery),
     target = as.factor(target),
-    order = as.factor(ifelse(order == 2, "MI->ME", "ME->MI"))
+    order = as.factor(ifelse(order == 2, "MI First", "ME First"))
   )
+
+contrasts(mep_dat_z$order) <- contr.equalprior_pairs(2)
+contrasts(mep_dat_z$target) <- contr.equalprior_pairs(8)
+
+
+
+### Actually run models ###
+
+set.seed(530453080)
+
+if (dir.exists("./mod_cache")) {
+
+  # If model cache exists, reload model results
+  mod_phys <- readRDS("./mod_cache/mod_phys.Rds")
+  mod_mi <- readRDS("./mod_cache/mod_mi.Rds")
+
+
+} else {
+
+  # Run MEP amplitude model for motor execution trials
+
+  bf_ampl <- bf(
+    ampl_z ~ target + target:order + (target | id)
+  )
+
+  mod_tmp <- brm(
+    bf_ampl, data = subset(mep_dat_z, imagery == FALSE),
+    prior = c(
+      prior(normal(0, 2), class = b),
+      prior(exponential(1), class = sd),
+      prior(exponential(1), class = sigma)
+    ),
+    chains = 0
+  )
+
+  mod_phys <- update(
+    mod_tmp, newdata = subset(mep_dat_z, imagery == FALSE),
+    recompile = FALSE,
+    iter = 15000, warmup = 5000,
+    chains = 8, cores = 8
+  )
+
+
+  # Run MEP amplitude model for motor imagery trials
+
+  mod_mi <- update(
+    mod_tmp, newdata = subset(mep_dat_z, imagery == TRUE),
+    recompile = FALSE,
+    iter = 15000, warmup = 5000,
+    chains = 8, cores = 8
+  )
+
+
+  # Save filtered data and results of models to RData
+
+  dir.create("./mod_cache")
+  saveRDS(mod_phys, file = "./mod_cache/mod_phys.Rds")
+  saveRDS(mod_mi, file = "./mod_cache/mod_mi.Rds")
+
+}
