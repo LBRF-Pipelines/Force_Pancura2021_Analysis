@@ -7,58 +7,80 @@
 
 ### Import required packages ###
 
+library(dplyr)
+library(bayestestR)
 library(ggplot2)
-library(ez)
 
 
-### Define plot themes ###
+### Plot force accuracy by target force
 
-plot_theme <- theme_classic() +
+force_acc <- force_means_pp %>%
+  group_by(target) %>%
+  summarize(
+    acc_pct = mean(target_achieved) * 100
+  )
+
+ggplot(force_acc, aes(x = as.factor(target), y = acc_pct)) +
+  geom_col(color = "lightskyblue3", fill = "lightskyblue3") +
+  labs(x = "Force (% MVC)", y = "Target Achieved (%)") +
+  geom_text(
+    aes(label = paste0(sprintf(acc_pct, fmt = "%#.1f"), "%")),
+    size = 4, nudge_y = -5, colour = "white"
+  ) +
   theme(
-    panel.border = element_blank(),
-    axis.line = element_line(color = "black", linewidth = 1),
-    legend.key = element_blank(),
-    strip.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    text = element_text(size = 22),
-    axis.text = element_text(color = "black", size = 18),
-    axis.title.y = element_text(margin = margin(r = 0.5, unit = "cm")),
-    axis.title.x = element_text(margin = margin(t = 0.5, unit = "cm")),
-    legend.title = element_text(size = 22),
-    axis.ticks = element_line(color = "black", linewidth = 1),
-    legend.text = element_text(size = 22),
-    legend.spacing.x = unit(0.5, "cm"),
-    legend.box.margin = margin(l = 1, unit = "cm"),
+    axis.title.x = element_text(margin = margin(t = 7)),
+    axis.title.y = element_text(margin = margin(r = 5))
+  ) +
+  theme_classic()
+
+
+
+### Plot the patterns of results from the models ###
+
+pd <- position_dodge(0.4)
+
+median_eti <- function(emm, .width = 0.9) {
+  # Computes ETIs and merges then on to the EMM table
+  emm_eti <- as_tibble(eti(emm, ci = .width)) %>%
+    separate("Parameter", c("target", "order"), extra = "merge")
+  left_join(as_tibble(emm), emm_eti, by = c("target", "order"))
+}
+
+
+# MEP amplitudes for motor execution trials
+
+ggplot(median_eti(emm_phys), aes(x = target, y = emmean, color = order)) +
+  geom_point(position = pd, size = 1.8) +
+  geom_errorbar(
+    aes(ymin = CI_low, ymax = CI_high), width = 0,
+    linewidth = 0.8, position = pd
+  ) +
+  xlab("Target Force (% MVC)") +
+  ylab("MEP Amplitude (Standardized)") +
+  labs(color = "Order") +
+  scale_color_manual(values = c("lightskyblue3", "lightskyblue4")) +
+  scale_y_continuous(breaks = c(-1.5, -1.0, -0.5, 0, 0.5, 1.0)) +
+  theme_classic() +
+  theme(
+    axis.title.x = element_text(margin = margin(t = 7)),
+    axis.title.y = element_text(margin = margin(r = 5))
   )
 
 
-# Plot some descriptives about force trial data
+# MEP ampitudes for motor imagery trials
 
-ggplot(force_data, aes(x = target)) +
-  geom_bar(color = "navyblue", fill = "navyblue", width = 3) +
-  labs(x = "Force (% MVC)", y = "Number of Successful Trials") +
-  geom_text(
-    aes(label = after_stat(count)), stat = "count",
-    size = 8, vjust = 1.5, colour = "white"
-  ) +
-  plot_theme
-
-ggplot(accuracy, aes(x = target, y = accuracy)) +
-  geom_point(color = "navyblue", size = 2) +
-  labs(x = "Force (% MVC)", y = "Accuracy (%)") +
+ggplot(median_eti(emm_mi), aes(x = target, y = emmean, color = order)) +
+  geom_point(position = pd, size = 1.8) +
   geom_errorbar(
-    aes(ymin = accuracy - sd, ymax = accuracy + sd),
-    linewidth = 0.3, width = 1, col = "navyblue"
+    aes(ymin = CI_low, ymax = CI_high), width = 0,
+    linewidth = 0.8, position = pd
   ) +
-  plot_theme
-
-ggplot(avg_accuracy, aes(x = target, y = avg_acc)) +
-  geom_point(size = 4.5, col = "navyblue") +
-  geom_errorbar(
-    aes(ymin = avg_acc - sd, ymax = avg_acc + sd),
-    linewidth = 0.5, col = "navyblue"
-  ) +
-  xlab("Force (% MVC)") +
-  ylab("Accuracy (%)") +
-  plot_theme
+  xlab("Target Force (% MVC)") +
+  ylab("MEP Amplitude (Standardized)") +
+  labs(color = "Order") +
+  scale_color_manual(values = c("lightskyblue3", "lightskyblue4")) +
+  theme_classic() +
+  theme(
+    axis.title.x = element_text(margin = margin(t = 7)),
+    axis.title.y = element_text(margin = margin(r = 5))
+  )
