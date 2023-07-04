@@ -17,6 +17,8 @@ library(arrow)
 source("./_Scripts/_settings.R")
 source("./_Scripts/utils.R")
 
+options(readr.show_progress = FALSE)
+
 
 
 ### Import trial metadata ###
