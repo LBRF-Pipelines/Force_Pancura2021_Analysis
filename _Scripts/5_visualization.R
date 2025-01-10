@@ -37,7 +37,7 @@ ggplot(force_acc, aes(x = as.factor(target), y = acc_pct)) +
 
 ### Plot the patterns of results from the models ###
 
-pd <- position_dodge(0.4)
+pd <- position_dodge(0.55)
 
 median_eti <- function(emm, .width = 0.9) {
   # Computes ETIs and merges then on to the EMM table
@@ -50,7 +50,7 @@ median_eti <- function(emm, .width = 0.9) {
 # MEP amplitudes for motor execution trials
 
 ggplot(median_eti(emm_phys), aes(x = target, y = emmean, color = order)) +
-  geom_point(position = pd, size = 1.8) +
+  geom_point(position = pd, size = 2.2) +
   geom_errorbar(
     aes(ymin = CI_low, ymax = CI_high), width = 0,
     linewidth = 0.8, position = pd
@@ -70,7 +70,7 @@ ggplot(median_eti(emm_phys), aes(x = target, y = emmean, color = order)) +
 # MEP ampitudes for motor imagery trials
 
 ggplot(median_eti(emm_mi), aes(x = target, y = emmean, color = order)) +
-  geom_point(position = pd, size = 1.8) +
+  geom_point(position = pd, size = 2.2) +
   geom_errorbar(
     aes(ymin = CI_low, ymax = CI_high), width = 0,
     linewidth = 0.8, position = pd

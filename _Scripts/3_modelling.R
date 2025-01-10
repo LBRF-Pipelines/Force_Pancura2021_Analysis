@@ -155,7 +155,7 @@ mep_dat_z <- mep_dat %>%
   mutate(
     imagery = as.factor(imagery),
     target = as.factor(target),
-    order = as.factor(ifelse(order == 2, "MI First", "ME First"))
+    order = as.factor(ifelse(order == 2, "MI First", "OE First"))
   )
 
 contrasts(mep_dat_z$order) <- contr.equalprior_pairs(2)

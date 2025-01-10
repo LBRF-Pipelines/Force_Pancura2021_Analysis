@@ -152,7 +152,7 @@ accuracy <- accuracy %>%
     accuracy,
     sd = sd(accuracy)
   )
-  
+
 avg_accuracy <- accuracy %>%
   group_by(target) %>%
   summarize(
